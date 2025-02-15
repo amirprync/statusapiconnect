@@ -33,20 +33,35 @@ def login(username, password, validation_code=None):
     try:
         response = requests.post(url, headers=headers, json=payload)
         
+        # Intentar obtener el contenido de la respuesta
+        try:
+            response_data = response.json()
+        except:
+            response_data = response.text
+
+        # Mostrar detalles de la respuesta para debugging
+        st.session_state['last_response'] = {
+            'status_code': response.status_code,
+            'response_data': response_data,
+            'request_payload': payload
+        }
+        
         # Si el status es 200, el login fue exitoso
         if response.status_code == 200:
             st.session_state['token'] = response.text
             return True, "Login exitoso"
         
         # Si recibimos otro código, puede ser que necesite 2FA
-        try:
-            error_data = response.json()
-            if "requiresToken" in error_data and error_data["requiresToken"]:
+        if isinstance(response_data, dict):
+            if "requiresToken" in response_data and response_data["requiresToken"]:
                 return False, "2FA_REQUIRED"
-        except:
-            pass
-            
-        return False, f"Error en la respuesta: {response.status_code}"
+            # Si hay mensaje de error en la respuesta, mostrarlo
+            if "error" in response_data:
+                return False, f"Error del servidor: {response_data['error']}"
+            if "message" in response_data:
+                return False, f"Error del servidor: {response_data['message']}"
+                
+        return False, f"Error en la respuesta ({response.status_code}): {response_data}"
         
     except requests.exceptions.RequestException as e:
         return False, f"Error en la conexión: {str(e)}"
@@ -151,3 +166,15 @@ st.markdown(f"Conectado a: {BASE_URL}")
 # Mostrar información de la sesión para debugging
 if st.checkbox("Mostrar información de debug"):
     st.write("Estado de la sesión:", st.session_state)
+    
+    # Si hay información de la última respuesta, mostrarla
+    if 'last_response' in st.session_state:
+        st.write("Última respuesta del servidor:", st.session_state['last_response'])
+        
+        # Mostrar detalles específicos de la respuesta
+        st.write("Detalles de la solicitud:")
+        st.json(st.session_state['last_response']['request_payload'])
+        
+        st.write("Código de estado:", st.session_state['last_response']['status_code'])
+        st.write("Respuesta del servidor:")
+        st.json(st.session_state['last_response']['response_data'])
