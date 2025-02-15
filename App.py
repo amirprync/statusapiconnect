@@ -3,11 +3,18 @@ import requests
 import json
 
 # Configuración de la página
-st.set_page_config(page_title="Login API", layout="wide")
+st.set_page_config(page_title="Login API Cohen", layout="wide")
+
+# URL base de la API
+BASE_URL = "https://connect.cohen.com.ar"
+
+def get_full_url(endpoint):
+    """Función para construir la URL completa"""
+    return f"{BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
 
 def login(username, password):
     """Función para realizar el login"""
-    url = "https://tu-api-base/Token"  # Reemplaza con la URL base de tu API
+    url = get_full_url("Token")
     
     headers = {
         "Content-Type": "application/json"
@@ -21,7 +28,7 @@ def login(username, password):
     
     try:
         response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
+        response.raise_for_status()
         
         # Guardar el token en la sesión
         if response.status_code == 200:
@@ -38,7 +45,7 @@ def verify_token():
     if 'token' not in st.session_state:
         return False, "No hay token"
         
-    url = "https://tu-api-base/api/Authorize/UserInfo"  # Reemplaza con la URL correcta
+    url = get_full_url("api/Authorize/UserInfo")
     
     headers = {
         "Authorization": f"Bearer {st.session_state['token']}"
@@ -55,7 +62,7 @@ def verify_token():
         return False, f"Error en la verificación: {str(e)}"
 
 # Interfaz de usuario
-st.title("Login API")
+st.title("Login API Cohen")
 
 # Si no hay token, mostrar formulario de login
 if 'token' not in st.session_state:
@@ -94,4 +101,4 @@ else:
 
 # Footer con información
 st.markdown("---")
-st.markdown("Aplicación de ejemplo para conexión con API")
+st.markdown(f"Conectado a: {BASE_URL}")
