@@ -12,7 +12,7 @@ def get_full_url(endpoint):
     """Función para construir la URL completa"""
     return f"{BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
 
-def login(username, password, validation_code=None):
+def login(username, password, validation_code):
     """Función para realizar el login"""
     url = get_full_url("Token")
     
@@ -23,12 +23,9 @@ def login(username, password, validation_code=None):
     payload = {
         "userName": username,
         "password": password,
+        "code": validation_code,  # Código de validación requerido
         "rememberMe": False
     }
-
-    # Agregar código de validación si está presente
-    if validation_code:
-        payload["code"] = validation_code
     
     try:
         response = requests.post(url, headers=headers, json=payload)
@@ -39,27 +36,16 @@ def login(username, password, validation_code=None):
         except:
             response_data = response.text
 
-        # Mostrar detalles de la respuesta para debugging
+        # Guardar detalles de la respuesta para debugging
         st.session_state['last_response'] = {
             'status_code': response.status_code,
             'response_data': response_data,
             'request_payload': payload
         }
         
-        # Si el status es 200, el login fue exitoso
         if response.status_code == 200:
             st.session_state['token'] = response.text
             return True, "Login exitoso"
-        
-        # Si recibimos otro código, puede ser que necesite 2FA
-        if isinstance(response_data, dict):
-            if "requiresToken" in response_data and response_data["requiresToken"]:
-                return False, "2FA_REQUIRED"
-            # Si hay mensaje de error en la respuesta, mostrarlo
-            if "error" in response_data:
-                return False, f"Error del servidor: {response_data['error']}"
-            if "message" in response_data:
-                return False, f"Error del servidor: {response_data['message']}"
                 
         return False, f"Error en la respuesta ({response.status_code}): {response_data}"
         
@@ -95,42 +81,14 @@ if 'token' not in st.session_state:
     with st.form("login_form"):
         username = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
+        validation_code = st.text_input("Código de Validación", help="Ingrese el código de verificación")
         
-        # Mostrar campo de código de validación si ya intentó login
-        if 'awaiting_2fa' in st.session_state and st.session_state['awaiting_2fa']:
-            validation_code = st.text_input("Código de Validación")
-        else:
-            validation_code = None
-            
         submit = st.form_submit_button("Iniciar Sesión")
         
         if submit:
-            # Guardar credenciales en sesión si es primer intento
-            if not st.session_state.get('awaiting_2fa'):
-                st.session_state['temp_username'] = username
-                st.session_state['temp_password'] = password
-            
-            # Usar credenciales guardadas si es segundo intento
-            if st.session_state.get('awaiting_2fa'):
-                username = st.session_state['temp_username']
-                password = st.session_state['temp_password']
-            
             success, message = login(username, password, validation_code)
-            
-            if message == "2FA_REQUIRED":
-                st.session_state['awaiting_2fa'] = True
-                st.warning("Por favor, ingrese el código de validación")
-                st.rerun()
-            elif success:
-                # Limpiar variables temporales
-                if 'temp_username' in st.session_state:
-                    del st.session_state['temp_username']
-                if 'temp_password' in st.session_state:
-                    del st.session_state['temp_password']
-                if 'awaiting_2fa' in st.session_state:
-                    del st.session_state['awaiting_2fa']
-                    
-                st.success("Login exitoso")
+            if success:
+                st.success(message)
                 st.rerun()
             else:
                 st.error(message)
