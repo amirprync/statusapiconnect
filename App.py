@@ -75,7 +75,7 @@ if 'token' not in st.session_state:
             success, message = login(username, password)
             if success:
                 st.success(message)
-                st.experimental_rerun()
+                st.rerun()  # Cambiado de experimental_rerun a rerun
             else:
                 st.error(message)
 
@@ -92,13 +92,17 @@ else:
         # Botón para cerrar sesión
         if st.button("Cerrar Sesión"):
             del st.session_state['token']
-            st.experimental_rerun()
+            st.rerun()  # Cambiado de experimental_rerun a rerun
             
     else:
         st.error(message)
         del st.session_state['token']
-        st.experimental_rerun()
+        st.rerun()  # Cambiado de experimental_rerun a rerun
 
 # Footer con información
 st.markdown("---")
 st.markdown(f"Conectado a: {BASE_URL}")
+
+# Mostrar información de la sesión para debugging
+if st.checkbox("Mostrar información de debug"):
+    st.write("Estado de la sesión:", st.session_state)
