@@ -12,7 +12,7 @@ def get_full_url(endpoint):
     """Función para construir la URL completa"""
     return f"{BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
 
-def login(username, password):
+def login(username, password, validation_code=None):
     """Función para realizar el login"""
     url = get_full_url("Token")
     
@@ -25,16 +25,27 @@ def login(username, password):
         "password": password,
         "rememberMe": False
     }
+
+    # Agregar código de validación si está presente
+    if validation_code:
+        payload["code"] = validation_code
     
     try:
         response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
         
-        # Guardar el token en la sesión
+        # Si el status es 200, el login fue exitoso
         if response.status_code == 200:
             st.session_state['token'] = response.text
             return True, "Login exitoso"
         
+        # Si recibimos otro código, puede ser que necesite 2FA
+        try:
+            error_data = response.json()
+            if "requiresToken" in error_data and error_data["requiresToken"]:
+                return False, "2FA_REQUIRED"
+        except:
+            pass
+            
         return False, f"Error en la respuesta: {response.status_code}"
         
     except requests.exceptions.RequestException as e:
@@ -69,13 +80,43 @@ if 'token' not in st.session_state:
     with st.form("login_form"):
         username = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
+        
+        # Mostrar campo de código de validación si ya intentó login
+        if 'awaiting_2fa' in st.session_state and st.session_state['awaiting_2fa']:
+            validation_code = st.text_input("Código de Validación")
+        else:
+            validation_code = None
+            
         submit = st.form_submit_button("Iniciar Sesión")
         
         if submit:
-            success, message = login(username, password)
-            if success:
-                st.success(message)
-                st.rerun()  # Cambiado de experimental_rerun a rerun
+            # Guardar credenciales en sesión si es primer intento
+            if not st.session_state.get('awaiting_2fa'):
+                st.session_state['temp_username'] = username
+                st.session_state['temp_password'] = password
+            
+            # Usar credenciales guardadas si es segundo intento
+            if st.session_state.get('awaiting_2fa'):
+                username = st.session_state['temp_username']
+                password = st.session_state['temp_password']
+            
+            success, message = login(username, password, validation_code)
+            
+            if message == "2FA_REQUIRED":
+                st.session_state['awaiting_2fa'] = True
+                st.warning("Por favor, ingrese el código de validación")
+                st.rerun()
+            elif success:
+                # Limpiar variables temporales
+                if 'temp_username' in st.session_state:
+                    del st.session_state['temp_username']
+                if 'temp_password' in st.session_state:
+                    del st.session_state['temp_password']
+                if 'awaiting_2fa' in st.session_state:
+                    del st.session_state['awaiting_2fa']
+                    
+                st.success("Login exitoso")
+                st.rerun()
             else:
                 st.error(message)
 
@@ -91,13 +132,17 @@ else:
         
         # Botón para cerrar sesión
         if st.button("Cerrar Sesión"):
-            del st.session_state['token']
-            st.rerun()  # Cambiado de experimental_rerun a rerun
+            # Limpiar toda la sesión
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
             
     else:
         st.error(message)
-        del st.session_state['token']
-        st.rerun()  # Cambiado de experimental_rerun a rerun
+        # Limpiar toda la sesión
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # Footer con información
 st.markdown("---")
